@@ -88,43 +88,55 @@ async def handle_query(ctx: Context, req: BridgeRequest) -> BridgeResponse:
         # Send message to target agent and wait for response
         ctx.logger.info(f"📤 Sending message to {req.target_agent}...")
         
-        # Use send_and_receive with chat protocol
-        response, status = await ctx.send_and_receive(
-            req.target_agent,
-            chat_msg,
-            response_type=ChatMessage,
-            timeout=30.0
-        )
+        # Send message and wait for response
+        await ctx.send(req.target_agent, chat_msg)
+        ctx.logger.info(f"📤 Message sent, waiting for response...")
         
-        if isinstance(response, ChatMessage):
-            # Extract text from response
-            response_text = ""
-            for item in response.content:
-                if isinstance(item, TextContent):
-                    response_text += item.text
+        # Wait for response using interval message
+        response_text = None
+        max_wait = 60  # 60 seconds max wait
+        check_interval = 0.5  # Check every 500ms
+        elapsed = 0
+        
+        # Store request ID for message handler to find
+        pending_requests[str(message_id)] = {
+            'request_id': req.request_id,
+            'response': None,
+            'received': False,
+            'sender': None
+        }
+        
+        # Wait for response
+        while elapsed < max_wait:
+            await asyncio.sleep(check_interval)
+            elapsed += check_interval
             
-            ctx.logger.info(f"📥 Received response: {response_text}")
-            
-            # Send acknowledgement
-            ack = ChatAcknowledgement(
-                acknowledged_msg_id=response.msg_id,
-                timestamp=datetime.utcnow()
-            )
-            await ctx.send(req.target_agent, ack)
-            
-            return BridgeResponse(
-                success=True,
-                response=response_text,
-                request_id=req.request_id
-            )
-        else:
-            ctx.logger.error(f"❌ Failed to receive response. Status: {status}")
-            return BridgeResponse(
-                success=False,
-                response="",
-                request_id=req.request_id,
-                error=f"No response from target agent. Status: {status}"
-            )
+            # Check if we received response
+            if pending_requests[str(message_id)]['received']:
+                response_text = pending_requests[str(message_id)]['response']
+                sender = pending_requests[str(message_id)]['sender']
+                
+                ctx.logger.info(f"📥 Received response: {response_text[:100]}...")
+                
+                # Clean up
+                del pending_requests[str(message_id)]
+                
+                return BridgeResponse(
+                    success=True,
+                    response=response_text,
+                    request_id=req.request_id
+                )
+        
+        # Timeout - no response received
+        ctx.logger.error(f"⏰ Timeout waiting for response from {req.target_agent}")
+        del pending_requests[str(message_id)]
+        
+        return BridgeResponse(
+            success=False,
+            response="",
+            request_id=req.request_id,
+            error=f"Timeout waiting for response from target agent"
+        )
             
     except Exception as e:
         ctx.logger.error(f"❌ Error handling query: {str(e)}")
@@ -136,14 +148,28 @@ async def handle_query(ctx: Context, req: BridgeRequest) -> BridgeResponse:
         )
 
 
-# Handle incoming chat messages (if other agents message us directly)
+# Handle incoming chat messages (responses from target agents)
 @chat_proto.on_message(ChatMessage)
 async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
-    """Handle incoming chat messages"""
+    """Handle incoming chat messages (responses)"""
     ctx.logger.info(f"💬 Received message from {sender}")
+    
+    # Extract text
+    message_text = ""
     for item in msg.content:
         if isinstance(item, TextContent):
-            ctx.logger.info(f"  Message: {item.text}")
+            message_text += item.text
+            ctx.logger.info(f"  Message: {item.text[:100]}...")
+    
+    # Find matching pending request
+    for msg_id, data in pending_requests.items():
+        if not data['received']:
+            # Store response
+            data['response'] = message_text
+            data['received'] = True
+            data['sender'] = sender
+            ctx.logger.info(f"✅ Matched response to pending request {msg_id}")
+            break
     
     # Send acknowledgement
     ack = ChatAcknowledgement(

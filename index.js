@@ -53,12 +53,25 @@ class UAgentClient {
      * @private
      */
     _initBridgeAgent() {
-        const bridgePath = path.join(__dirname, 'bridge_agent.py');
+        // Try multiple paths to find bridge_agent.py
+        const possiblePaths = [
+            path.join(__dirname, 'bridge_agent.py'),
+            path.join(process.cwd(), 'node_modules', 'uagent-client', 'bridge_agent.py'),
+            path.join(require.resolve('uagent-client'), '..', 'bridge_agent.py')
+        ];
         
-        // Check if bridge_agent.py exists
-        if (!fs.existsSync(bridgePath)) {
-            console.warn('⚠️  Bridge agent not found at:', bridgePath);
-            console.warn('    Please ensure bridge_agent.py is in the module directory.');
+        let bridgePath = null;
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                bridgePath = p;
+                break;
+            }
+        }
+        
+        if (!bridgePath) {
+            console.warn('⚠️  Bridge agent not found. Tried:');
+            possiblePaths.forEach(p => console.warn('    -', p));
+            console.warn('    Disabling auto-start. Please start bridge manually or check installation.');
             this.autoStartBridge = false;
             return;
         }

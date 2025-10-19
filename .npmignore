@@ -32,3 +32,12 @@ build/
 __pycache__/
 private_keys.json
 
+# Documentation (internal only - not for npm)
+FINAL_STEPS.md
+PACKAGE_INFO.md
+PUBLISH.md
+
+# Git
+.git/
+.gitignore
+

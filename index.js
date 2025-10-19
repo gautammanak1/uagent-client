@@ -56,9 +56,16 @@ class UAgentClient {
         // Try multiple paths to find bridge_agent.py
         const possiblePaths = [
             path.join(__dirname, 'bridge_agent.py'),
-            path.join(process.cwd(), 'node_modules', 'uagent-client', 'bridge_agent.py'),
-            path.join(require.resolve('uagent-client'), '..', 'bridge_agent.py')
+            path.join(process.cwd(), 'node_modules', 'uagent-client', 'bridge_agent.py')
         ];
+        
+        // Try require.resolve only if package is installed
+        try {
+            const resolved = require.resolve('uagent-client');
+            possiblePaths.push(path.join(resolved, '..', 'bridge_agent.py'));
+        } catch (e) {
+            // Package not installed via npm, skip this path
+        }
         
         let bridgePath = null;
         for (const p of possiblePaths) {

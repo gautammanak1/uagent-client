@@ -48,6 +48,14 @@ pending_requests = {}
 @bridge_agent.on_event("startup")
 async def startup(ctx: Context):
     """Startup handler"""
+    ctx.logger.info("=" * 60)
+    ctx.logger.info("🌉 uAgent Bridge Server with Chat Protocol")
+    ctx.logger.info("=" * 60)
+    ctx.logger.info(f"Bridge Agent Address: {ctx.agent.address}")
+    ctx.logger.info(f"REST Endpoint: http://localhost:8000/query")
+    ctx.logger.info("Ready to receive queries from Node.js/Frontend...")
+    ctx.logger.info("Frontend can send queries to ANY agent address!")
+    ctx.logger.info("=" * 60)
 
 # REST endpoint to receive requests from Node.js/Frontend
 @bridge_agent.on_rest_post("/query", BridgeRequest, BridgeResponse)
@@ -156,5 +164,16 @@ async def handle_acknowledgement(ctx: Context, sender: str, msg: ChatAcknowledge
 bridge_agent.include(chat_proto, publish_manifest=True)
 
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
+    print("\n" + "=" * 60)
+    print("🌉 uAgent Bridge Server with Chat Protocol")
+    print("=" * 60)
+    print(f"Bridge Agent Address: {bridge_agent.address}")
+    print(f"REST Endpoint: http://localhost:8000/query")
+    print("Ready to receive queries from Node.js/Frontend...")
+    print("Frontend can send queries to ANY agent address!")
+    print("=" * 60 + "\n")
+    print("Press Ctrl+C to stop")
+    print("=" * 60 + "\n")
+    
     bridge_agent.run()

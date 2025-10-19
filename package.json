@@ -1,0 +1,52 @@
+{
+  "name": "uagent-client",
+  "version": "1.0.0",
+  "description": "Lightweight Node.js/TypeScript client for communicating with Fetch.ai uAgents",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "uagent",
+    "fetch.ai",
+    "fetchai",
+    "agent",
+    "ai-agent",
+    "autonomous-agent",
+    "communication",
+    "typescript",
+    "nodejs",
+    "blockchain",
+    "cosmos",
+    "multi-agent"
+  ],
+  "author": "Gautam Manak <gautammanak1@github>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gautammanak1/uagent-client"
+  },
+  "bugs": {
+    "url": "https://github.com/gautammanak1/uagent-client/issues"
+  },
+  "homepage": "https://github.com/gautammanak1/uagent-client#readme",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "bridge_agent.py",
+    "requirements.txt",
+    "README.md",
+    "LICENSE"
+  ]
+}
+

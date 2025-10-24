@@ -111,8 +111,8 @@ class UAgentClient {
         }
 
         bridgeStartingState = true;
-        console.log('🌉 Starting shared bridge agent...');
-        console.log(`   (Client ${this.instanceId}, Total clients: ${bridgeRefCount})`);
+        // console.log('🌉 Starting shared bridge agent...');
+        // console.log(`   (Client ${this.instanceId}, Total clients: ${bridgeRefCount})`);
         
         // Spawn Python process
         sharedBridgeProcess = spawn('python', [bridgePath], {
@@ -127,13 +127,13 @@ class UAgentClient {
                 bridgeReadyState = true;
                 bridgeStartingState = false;
                 if (process.env.DEBUG_BRIDGE !== 'silent') {
-                    console.log('✅ Shared bridge ready at', this.bridgeUrl);
-                    console.log(`   Available for ${bridgeRefCount} client(s)`);
+                    // console.log('✅ Shared bridge ready at', this.bridgeUrl);
+                    // console.log(`   Available for ${bridgeRefCount} client(s)`);
                 }
             }
             // Log bridge output in debug mode
             if (process.env.DEBUG_BRIDGE === 'verbose') {
-                console.log('[Bridge]', output.trim());
+                // console.log('[Bridge]', output.trim());
             }
         });
 
@@ -142,14 +142,14 @@ class UAgentClient {
             const error = data.toString();
             // Only show important errors
             if (!error.includes('WARNING') && process.env.DEBUG_BRIDGE === 'verbose') {
-                console.error('[Bridge]', error.trim());
+                // console.error('[Bridge]', error.trim());
             }
         });
 
         // Handle process exit
         sharedBridgeProcess.on('close', (code) => {
             if (code !== 0 && code !== null) {
-                console.warn(`⚠️  Shared bridge agent exited with code ${code}`);
+                // console.warn(`⚠️  Shared bridge agent exited with code ${code}`);
             }
             bridgeReadyState = false;
             bridgeStartingState = false;
@@ -168,7 +168,7 @@ class UAgentClient {
             
             process.on('SIGINT', () => {
                 if (sharedBridgeProcess && !sharedBridgeProcess.killed) {
-                    console.log('\n🛑 Stopping shared bridge...');
+                    // console.log('\n🛑 Stopping shared bridge...');
                     sharedBridgeProcess.kill('SIGTERM');
                 }
                 process.exit(0);
@@ -202,13 +202,13 @@ class UAgentClient {
         while (Date.now() - startTime < maxWaitTime) {
             // Show progress every 4 seconds
             if (Date.now() - lastLog > 4000) {
-                console.log('⏳ Waiting for shared bridge...');
+                // console.log('⏳ Waiting for shared bridge...');
                 lastLog = Date.now();
             }
             
             if (await this.ping()) {
                 bridgeReadyState = true;
-                console.log('✅ Shared bridge is responsive');
+                // console.log('✅ Shared bridge is responsive');
                 return true;
             }
             await new Promise(resolve => setTimeout(resolve, checkInterval));

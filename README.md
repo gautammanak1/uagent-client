@@ -1,37 +1,32 @@
 # uAgent Client
 
-A lightweight Node.js/TypeScript client for communicating with [Fetch.ai](https://fetch.ai) uAgents. Query any uAgent in the Fetch.ai ecosystem directly from your JavaScript/TypeScript application.
+Talk to any Fetch.ai uAgent from your Node.js or web application. Simple, fast, and easy to use.
 
 [![npm version](https://img.shields.io/npm/v/uagent-client.svg)](https://www.npmjs.com/package/uagent-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub](https://img.shields.io/github/stars/gautammanak1/uagent-client?style=social)](https://github.com/gautammanak1/uagent-client)
 
-**Repository**: [github.com/gautammanak1/uagent-client](https://github.com/gautammanak1/uagent-client)
+## What is this?
 
-## Features
+A simple client that lets you chat with Fetch.ai uAgents (AI agents on the blockchain) from your JavaScript/TypeScript code.
 
-- ✅ **Zero Configuration** - Works out of the box
-- ✅ **TypeScript Support** - Full type definitions included
-- ✅ **Parallel Queries** - Query multiple agents simultaneously
-- ✅ **Automatic Management** - Handles all lifecycle automatically
-- ✅ **Promise-based API** - Modern async/await support
+### Why use uAgent Client?
 
-## Installation
+- ✅ **Easy Integration** - Works with any Node.js or web app
+- ✅ **TypeScript Ready** - Full type support out of the box
+- ✅ **Auto Bridge** - Automatically handles the bridge agent for you
+- ✅ **Simple API** - Just query and get responses
+- ✅ **No Setup** - Zero configuration needed
+- ✅ **Production Ready** - Used in real applications
+
+## Quick Start
+
+### Install
 
 ```bash
 npm install uagent-client
 ```
 
-### Prerequisites
-
-- Node.js 14 or higher
-- Python 3.8+ with `uagents` package installed:
-
-```bash
-pip install uagents uagents-core
-```
-
-## Quick Start
+### Use it
 
 ```javascript
 const UAgentClient = require('uagent-client');
@@ -39,7 +34,7 @@ const UAgentClient = require('uagent-client');
 // Create client
 const client = new UAgentClient();
 
-// Query an agent
+// Ask a question
 const result = await client.query(
     'agent1q2g97humd4d6mgmcg783s2dsncu8hn37r3sgglu6eqa6es07wk3xqlmmy4v',
     'Search for pizza restaurants in New York'
@@ -47,154 +42,227 @@ const result = await client.query(
 
 if (result.success) {
     console.log(result.response);
+} else {
+    console.error(result.error);
 }
 ```
 
-## Usage
+That's it! 🎉
+
+## How to Use
 
 ### Basic Query
 
 ```javascript
 const UAgentClient = require('uagent-client');
 
-async function queryAgent() {
+async function main() {
     const client = new UAgentClient();
     
-    const result = await client.query(agentAddress, 'Your query here');
-    
-    if (result.success) {
-        console.log(result.response);
-    } else {
-        console.error(result.error);
-    }
-}
-```
-
-### TypeScript
-
-```typescript
-import UAgentClient, { QueryResponse } from 'uagent-client';
-
-async function queryAgent(): Promise<void> {
-    const client = new UAgentClient();
-    
-    const result: QueryResponse = await client.query(
-        agentAddress,
-        'Your query'
+    const result = await client.query(
+        'agent_address_here',
+        'Your question here'
     );
     
     if (result.success) {
-        console.log(result.response);
+        console.log('Agent says:', result.response);
+    } else {
+        console.log('Error:', result.error);
     }
+}
+
+main();
+```
+
+### Simple Method (Returns String)
+
+```javascript
+const client = new UAgentClient();
+
+try {
+    const response = await client.ask('agent_address', 'Your question');
+    console.log(response); // Just the response string
+} catch (error) {
+    console.error('Failed:', error.message);
 }
 ```
 
-### Configuration
+### Configure Settings
 
 ```javascript
 const client = new UAgentClient({
-    timeout: 60000,  // Request timeout in milliseconds (default: 35000)
-    bridgeUrl: 'http://localhost:8000',  // Bridge URL (default)
-    autoStartBridge: true  // Auto-start bridge (default: true)
+    timeout: 60000,         // Wait 60 seconds for response
+    bridgeUrl: 'http://localhost:8000',  // Bridge server URL
+    autoStartBridge: true   // Auto-start bridge (default: true)
 });
 ```
 
-## API Reference
+## Build a Web App (Next.js)
 
-### `UAgentClient`
+Want to build a chat interface? Here's how:
 
-#### Constructor
+### 1. Backend API (`app/api/chat/route.ts`)
 
 ```typescript
-new UAgentClient(config?: {
-    timeout?: number;
-    bridgeUrl?: string;
-    autoStartBridge?: boolean;
-})
-```
+import { NextRequest, NextResponse } from 'next/server';
+import UAgentClient from 'uagent-client';
 
-**Parameters:**
-- `timeout` - Request timeout in milliseconds (default: 35000)
-- `bridgeUrl` - Bridge server URL (default: 'http://localhost:8000')
-- `autoStartBridge` - Automatically start bridge (default: true)
+const client = new UAgentClient();
 
-#### Methods
-
-##### `query(agentAddress: string, query: string, requestId?: string): Promise<QueryResponse>`
-
-Send a query to a uAgent.
-
-**Parameters:**
-- `agentAddress` - The address of the target uAgent
-- `query` - The query/message to send
-- `requestId` - Optional request ID (auto-generated if not provided)
-
-**Returns:**
-```typescript
-{
-    success: boolean;
-    response?: string;  // Present if success is true
-    error?: string;     // Present if success is false
-    requestId: string;
+export async function POST(req: NextRequest) {
+    const { agentAddress, query } = await req.json();
+    
+    const result = await client.query(agentAddress, query);
+    
+    return NextResponse.json(result);
 }
 ```
 
-**Example:**
-```javascript
-const result = await client.query(agentAddress, 'What is AI?');
+### 2. Frontend Component (`app/page.tsx`)
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export default function Chat() {
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!input.trim() || loading) return;
+
+        const userMessage = input.trim();
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+        setLoading(true);
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agentAddress: 'your_agent_address',
+                    query: userMessage
+                })
+            });
+            
+            const data = await res.json();
+            
+            setMessages(prev => [...prev, { 
+                role: 'agent', 
+                content: data.success ? data.response : 'Error: ' + data.error
+            }]);
+        } catch (error) {
+            setMessages(prev => [...prev, { 
+                role: 'agent', 
+                content: 'Failed to get response' 
+            }]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-screen max-w-4xl mx-auto p-4">
+            <h1 className="text-2xl font-bold mb-4">Chat with uAgent</h1>
+            
+            <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+                {messages.map((msg, i) => (
+                    <div key={i} className={`p-4 rounded-lg ${
+                        msg.role === 'user' ? 'bg-blue-100 ml-auto' : 'bg-gray-100'
+                    }`}>
+                        <p className="font-semibold mb-1">{msg.role === 'user' ? 'You' : 'Agent'}</p>
+                        <p>{msg.content}</p>
+                    </div>
+                ))}
+                {loading && <div className="text-gray-500">Agent is thinking...</div>}
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex gap-2">
+                <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 p-3 border rounded-lg"
+                    disabled={loading}
+                />
+                <button type="submit" disabled={loading || !input.trim()}
+                    className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50">
+                    Send
+                </button>
+            </form>
+        </div>
+    );
+}
 ```
 
-##### `ask(agentAddress: string, query: string): Promise<string>`
+### 3. Run
 
-Send a query and get only the response string. Throws error if query fails.
-
-**Parameters:**
-- `agentAddress` - The address of the target uAgent
-- `query` - The query/message to send
-
-**Returns:** `Promise<string>` - The response from the agent
-
-**Throws:** Error if the query fails
-
-**Example:**
-```javascript
-const response = await client.ask(agentAddress, 'What is AI?');
-console.log(response);
+```bash
+npm run dev
 ```
 
-##### `ping(): Promise<boolean>`
+**See complete example**: [frontend-integration](https://github.com/gautammanak1/frontend-integration)
 
-Check if the client is ready to send queries.
+## API Reference
 
-**Returns:** `Promise<boolean>` - true if ready
+### Constructor
 
-**Example:**
 ```javascript
-const isReady = await client.ping();
+new UAgentClient({
+    timeout?: number,          // Default: 35000ms
+    bridgeUrl?: string,         // Default: 'http://localhost:8000'
+    autoStartBridge?: boolean   // Default: true
+})
 ```
 
-##### `stopBridge(): void`
+### Methods
 
-Stop the client. Call this when you're done to cleanup resources.
+#### `query(agentAddress, query, requestId?)`
 
-**Example:**
+Send a query to an agent.
+
+**Returns:**
 ```javascript
-client.stopBridge();
+{
+    success: boolean,
+    response?: string,   // Response if success
+    error?: string,      // Error if failed
+    requestId: string
+}
 ```
 
-## Advanced Usage
+#### `ask(agentAddress, query)`
 
-### Parallel Queries
+Send a query and get only the response string. Throws error if fails.
 
-Query multiple agents simultaneously:
+**Returns:** `Promise<string>`
+
+#### `ping()`
+
+Check if client is ready.
+
+**Returns:** `Promise<boolean>`
+
+#### `stopBridge()`
+
+Stop the client and cleanup.
+
+## Common Use Cases
+
+### Query Multiple Agents
 
 ```javascript
 const client = new UAgentClient();
 
 const results = await Promise.all([
-    client.query(agent1, 'Query 1'),
-    client.query(agent2, 'Query 2'),
-    client.query(agent3, 'Query 3')
+    client.query(agent1, 'Question 1'),
+    client.query(agent2, 'Question 2'),
+    client.query(agent3, 'Question 3')
 ]);
 
 results.forEach((result, i) => {
@@ -204,26 +272,20 @@ results.forEach((result, i) => {
 });
 ```
 
-### Error Handling
+### Add Retry Logic
 
 ```javascript
-try {
-    const result = await client.query(agentAddress, query);
-    
-    if (result.success) {
-        // Handle success
-        console.log(result.response);
-    } else {
-        // Handle failure
-        console.error(result.error);
+async function queryWithRetry(client, address, query, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+        const result = await client.query(address, query);
+        if (result.success) return result;
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
-} catch (error) {
-    // Handle exception
-    console.error('Request failed:', error.message);
+    throw new Error('Max retries exceeded');
 }
 ```
 
-### Express.js Integration
+### Express.js API
 
 ```javascript
 const express = require('express');
@@ -235,80 +297,84 @@ const client = new UAgentClient();
 app.use(express.json());
 
 app.post('/api/query', async (req, res) => {
-    try {
-        const { agentAddress, query } = req.body;
-        
-        const result = await client.query(agentAddress, query);
-        
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+    const { agentAddress, query } = req.body;
+    const result = await client.query(agentAddress, query);
+    res.json(result);
 });
 
 app.listen(3000);
 ```
 
-### React Example
+## Important Notes
+
+### Security ⚠️
+
+**Never use uAgent Client directly in the browser!**
 
 ```javascript
-import { useState } from 'react';
+// ❌ DON'T DO THIS IN BROWSER
+import UAgentClient from 'uagent-client';
 
-function AgentQuery() {
-    const [response, setResponse] = useState('');
-    const [loading, setLoading] = useState(false);
+// ✅ DO THIS INSTEAD
+// Create an API route and call it from browser
+fetch('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ query })
+});
+```
 
-    const handleQuery = async () => {
-        setLoading(true);
-        
-        try {
-            const res = await fetch('/api/query', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    agentAddress: 'agent1q2g97...',
-                    query: 'Your query'
-                })
-            });
-            
-            const data = await res.json();
-            
-            if (data.success) {
-                setResponse(data.response);
-            }
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
+### Best Practices
 
-    return (
-        <div>
-            <button onClick={handleQuery} disabled={loading}>
-                Query Agent
-            </button>
-            {response && <div>{response}</div>}
-        </div>
-    );
-}
+1. ✅ Create **one client instance** per application
+2. ✅ Reuse the client instance across requests
+3. ✅ Set appropriate timeout for your use case
+4. ✅ Handle errors gracefully
+5. ✅ Validate inputs before sending
+6. ❌ Don't create new client for each request
+
+## Troubleshooting
+
+### "Failed to start"
+
+**Solution:** Install Python and uagents:
+
+```bash
+python3 --version  # Should be 3.8+
+pip install uagents uagents-core
+```
+
+### "No response"
+
+**Possible causes:**
+- Agent is offline
+- Wrong agent address
+- Network issues
+- Timeout too short
+
+**Solution:** Increase timeout:
+
+```javascript
+const client = new UAgentClient({ timeout: 120000 });
+```
+
+### "Port already in use"
+
+**Solution:** Only create one client instance, or use different port:
+
+```javascript
+const client = new UAgentClient({ 
+    bridgeUrl: 'http://localhost:8001' 
+});
 ```
 
 ## TypeScript Support
 
-Full TypeScript definitions are included. Import types:
+Full TypeScript types included:
 
 ```typescript
-import UAgentClient, { 
-    QueryResponse, 
-    UAgentClientConfig 
-} from 'uagent-client';
+import UAgentClient, { QueryResponse } from 'uagent-client';
 
-const config: UAgentClientConfig = {
-    timeout: 60000
-};
-
-const client = new UAgentClient(config);
+const client = new UAgentClient();
 
 const result: QueryResponse = await client.query(
     agentAddress,
@@ -316,104 +382,27 @@ const result: QueryResponse = await client.query(
 );
 ```
 
-## Multiple Client Instances
-
-Multiple client instances automatically share resources:
-
-```javascript
-const client1 = new UAgentClient();
-const client2 = new UAgentClient();
-const client3 = new UAgentClient();
-
-// All clients share the same connection
-// No conflicts, automatic management
-```
-
-## Performance Tips
-
-### 1. Reuse Client Instance
-
-```javascript
-// Good - Reuse client
-const client = new UAgentClient();
-app.use((req, res, next) => {
-    req.client = client;
-    next();
-});
-
-// Avoid - Creating new client per request
-app.post('/api/query', async (req, res) => {
-    const client = new UAgentClient(); // ❌ Don't do this
-    // ...
-});
-```
-
-### 2. Set Appropriate Timeout
-
-```javascript
-// For fast agents
-const client = new UAgentClient({ timeout: 10000 });
-
-// For slow/complex agents
-const client = new UAgentClient({ timeout: 120000 });
-```
-
-### 3. Parallel Processing
-
-```javascript
-// Query multiple agents in parallel
-const results = await Promise.all(
-    agentAddresses.map(addr => client.query(addr, query))
-);
-```
-
-## Troubleshooting
-
-### "Failed to start"
-
-**Solution:** Ensure Python 3.8+ is installed with uagents package:
-```bash
-python3 --version
-pip install uagents uagents-core
-```
-
-### "No response"
-
-**Possible causes:**
-- Agent is offline or not responding
-- Incorrect agent address
-- Network connectivity issues
-- Timeout too short
-
-**Solution:** Increase timeout or verify agent status:
-```javascript
-const client = new UAgentClient({ timeout: 120000 });
-```
-
-### "Port already in use"
-
-**Solution:** Only create one client instance per application, or specify different port:
-```javascript
-const client = new UAgentClient({ 
-    bridgeUrl: 'http://localhost:8001' 
-});
-```
-
 ## Examples
 
-### Simple Query
+### Simple Chat Bot
 
 ```javascript
 const UAgentClient = require('uagent-client');
 
 const client = new UAgentClient();
 
-const result = await client.query(
-    'agent1q2g97humd4d6mgmcg783s2dsncu8hn37r3sgglu6eqa6es07wk3xqlmmy4v',
-    'Search for restaurants'
-);
+async function chat(message) {
+    const result = await client.query(
+        'agent1q2g97humd4d6mgmcg783s2dsncu8hn37r3sgglu6eqa6es07wk3xqlmmy4v',
+        message
+    );
+    
+    return result.success ? result.response : 'Sorry, I could not respond.';
+}
 
-console.log(result.response);
+// Use it
+const response = await chat('Hello!');
+console.log(response);
 ```
 
 ### Batch Processing
@@ -421,8 +410,7 @@ console.log(result.response);
 ```javascript
 const agents = [
     { address: 'agent1...', query: 'Query 1' },
-    { address: 'agent2...', query: 'Query 2' },
-    { address: 'agent3...', query: 'Query 3' }
+    { address: 'agent2...', query: 'Query 2' }
 ];
 
 const results = await Promise.all(
@@ -430,63 +418,32 @@ const results = await Promise.all(
 );
 
 const successful = results.filter(r => r.success);
-console.log(`${successful.length}/${results.length} queries succeeded`);
+console.log(`${successful.length}/${results.length} succeeded`);
 ```
 
-### With Retry Logic
+## Complete Example Project
 
-```javascript
-async function queryWithRetry(client, address, query, maxRetries = 3) {
-    for (let i = 0; i < maxRetries; i++) {
-        const result = await client.query(address, query);
-        
-        if (result.success) {
-            return result;
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    
-    throw new Error('Max retries exceeded');
-}
-```
+🚀 **[Frontend Integration](https://github.com/gautammanak1/frontend-integration)** - Full Next.js chat app with:
+- Modern UI (like ChatGPT)
+- Dark mode support
+- TypeScript
+- Production-ready code
 
-## Best Practices
+## Learn More
 
-1. **Create one client instance** per application
-2. **Set appropriate timeouts** based on expected response times
-3. **Handle errors gracefully** - agents may be offline
-4. **Use TypeScript** for better type safety
-5. **Implement retry logic** for critical operations
-6. **Close client** when done: `client.stopBridge()`
+- [GitHub Repository](https://github.com/gautammanak1/uagent-client)
+- [NPM Package](https://www.npmjs.com/package/uagent-client)
+- [Fetch.ai](https://fetch.ai)
+- [uAgents Framework](https://github.com/fetchai/uAgents)
 
 ## License
 
 MIT
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Links
-
-- **GitHub Repository**: [gautammanak1/uagent-client](https://github.com/gautammanak1/uagent-client)
-- [Fetch.ai](https://fetch.ai)
-- [uAgents Framework](https://github.com/fetchai/uAgents)
-- [Documentation](https://docs.fetch.ai)
-
-## Support
-
-For issues and questions:
-- **GitHub Issues**: [Create an issue](https://github.com/gautammanak1/uagent-client/issues)
-- **Repository**: [github.com/gautammanak1/uagent-client](https://github.com/gautammanak1/uagent-client)
-- **NPM Package**: [npmjs.com/package/uagent-client](https://www.npmjs.com/package/uagent-client)
-
 ## Author
 
 **Gautam Manak**
 - GitHub: [@gautammanak1](https://github.com/gautammanak1)
-- Repository: [uagent-client](https://github.com/gautammanak1/uagent-client)
 
 ---
 

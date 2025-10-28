@@ -29,6 +29,8 @@ Thumbs.db
 
 # Private keys
 private_keys.json
+temp_create_bridge.py
+WORKFLOW_DIAGRAM.md
 
 # Build
 dist/

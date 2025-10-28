@@ -1,6 +1,6 @@
 {
   "name": "uagent-client",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Lightweight Node.js/TypeScript client for communicating with Fetch.ai uAgents",
   "main": "index.js",
   "types": "index.d.ts",

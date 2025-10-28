@@ -11,11 +11,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Global shared bridge state for multiple clients
-let sharedBridgeProcess = null;
-let bridgeRefCount = 0;
-let bridgeReadyState = false;
-let bridgeStartingState = false;
+// Global bridge registry - stores user-specific bridges
+const bridgeRegistry = new Map();
 
 class UAgentClient {
     /**
@@ -25,17 +22,29 @@ class UAgentClient {
      * @param {number} config.timeout - Request timeout in milliseconds (default: 35000)
      * @param {boolean} config.autoStartBridge - Auto-start bridge agent (default: true)
      * @param {number} config.bridgePort - Port for bridge agent (default: 8000)
+     * @param {string} config.userSeed - Unique seed for per-user bridge agent
+     * @param {string} config.agentverseToken - Bearer token for Agentverse registration
      */
     constructor(config = {}) {
         this.bridgeUrl = config.bridgeUrl || 'http://localhost:8000';
         this.timeout = config.timeout || 35000;
         this.autoStartBridge = config.autoStartBridge !== false; // default true
         this.bridgePort = config.bridgePort || 8000;
+        this.userSeed = config.userSeed;
+        this.agentverseToken = config.agentverseToken;
         this.instanceId = crypto.randomBytes(4).toString('hex');
         this.isRegistered = false;
+        this.userBridgeId = null;
+        
+        // If user provides seed and token, use per-user bridge
+        if (this.userSeed && this.agentverseToken) {
+            this.userBridgeId = this._getBridgeId(this.userSeed);
+            // Don't auto-start, will be started when bridge is created
+            this.autoStartBridge = false;
+        }
         
         // Auto-start bridge agent if enabled (shared across all instances)
-        if (this.autoStartBridge) {
+        if (this.autoStartBridge && !this.userBridgeId) {
             this._initBridgeAgent();
         }
     }
@@ -49,56 +58,246 @@ class UAgentClient {
     }
 
     /**
+     * Get or create a per-user bridge agent
+     * @param {string} seed - Unique seed for the user
+     * @param {string} agentverseToken - Bearer token for Agentverse
+     * @param {number} port - Optional port number
+     * @returns {Promise<Object>} Bridge agent info
+     */
+    async createUserBridge(seed, agentverseToken, port = null) {
+        const bridgeId = this._getBridgeId(seed);
+        
+        // Check if bridge already exists
+        if (bridgeRegistry.has(bridgeId)) {
+            const bridgeInfo = bridgeRegistry.get(bridgeId);
+            this.bridgeUrl = `http://localhost:${bridgeInfo.port}`;
+            return bridgeInfo;
+        }
+
+        // Find bridge_agent.py
+        const bridgePath = this._findBridgeAgent();
+        if (!bridgePath) {
+            throw new Error('Bridge agent not found');
+        }
+
+        // Create temporary Python script file
+        const tempScript = path.join(__dirname, 'temp_create_bridge.py');
+        
+        // Properly escape the path for Python raw string
+        const bridgeDir = path.dirname(bridgePath).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        
+        const pythonScript = `#!/usr/bin/env python
+import sys
+import os
+import json
+import logging
+import contextlib
+import io
+import signal
+import time
+
+# Suppress ALL logging and print statements
+logging.basicConfig(level=logging.CRITICAL, format='')
+
+# Redirect stdout temporarily to capture JSON output
+output_capture = io.StringIO()
+
+try:
+    sys.path.insert(0, r'${bridgeDir}')
+    
+    # Also suppress print statements from bridge_agent
+    original_print = print
+    def silent_print(*args, **kwargs):
+        pass
+    
+    import builtins
+    builtins.print = silent_print
+    
+    from bridge_agent import create_bridge_agent
+    
+    # Capture stdout temporarily
+    original_stdout = sys.stdout
+    sys.stdout = output_capture
+    
+    # Create the bridge agent
+    agent_info = create_bridge_agent(
+        seed="${seed}",
+        agentverse_token="${agentverseToken}",
+        port=${port || 'None'},
+        mailbox=True
+    )
+    
+    # Get the captured output
+    captured = output_capture.getvalue()
+    
+    # Restore stdout
+    sys.stdout = original_stdout
+    builtins.print = original_print
+    
+    # Output JSON to stderr (not stdout!) so the main process can read it
+    json_output = json.dumps({
+        "name": agent_info["name"],
+        "address": agent_info.get("address", ""),
+        "port": agent_info["port"],
+        "seed": agent_info["seed"]
+    })
+    sys.stderr.write(json_output + "\\n")
+    sys.stderr.flush()
+    
+    # Wait for the agent thread to be fully ready
+    time.sleep(3)
+    
+    # Keep the process alive so the agent thread keeps running
+    # The thread will be killed when this process exits
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+        
+except Exception as e:
+    sys.stderr.write(json.dumps({"error": str(e)}) + "\\n")
+    sys.exit(1)
+`;
+
+        try {
+            // Write script to temp file
+            require('fs').writeFileSync(tempScript, pythonScript);
+            
+            // Spawn Python script as background process
+            const { spawn } = require('child_process');
+            const pythonProcess = spawn('python', [tempScript], {
+                stdio: ['ignore', 'pipe', 'pipe'] // stdin, stdout, stderr
+            });
+            
+            // Read JSON from stderr (we write it there to avoid stdout interference)
+            let jsonOutput = '';
+            
+            // Wait for JSON output (bridge info will be on a single line)
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    pythonProcess.kill();
+                    reject(new Error('Timeout waiting for bridge info'));
+                }, 10000);
+                
+                pythonProcess.stderr.on('data', (data) => {
+                    const output = data.toString();
+                    jsonOutput += output;
+                    
+                    // Look for JSON line (starts with {)
+                    const lines = output.split('\n');
+                    for (const line of lines) {
+                        if (line.trim().startsWith('{')) {
+                            jsonOutput = line.trim();
+                            clearTimeout(timeout);
+                            resolve();
+                            return;
+                        }
+                    }
+                });
+                
+                pythonProcess.on('error', (error) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                });
+            });
+            
+            // Parse JSON from stderr output
+            const bridgeInfo = JSON.parse(jsonOutput);
+            
+            // Store process reference
+            bridgeInfo.pid = pythonProcess.pid;
+            bridgeInfo.process = pythonProcess; // Keep reference to keep it alive
+            
+            // Clean up temp file
+            try {
+                require('fs').unlinkSync(tempScript);
+            } catch (e) {
+                // Ignore cleanup errors
+            }
+            
+            // Handle process cleanup on exit
+            pythonProcess.on('exit', () => {
+                bridgeRegistry.delete(bridgeId);
+            });
+            
+            // Store in registry
+            bridgeRegistry.set(bridgeId, bridgeInfo);
+            
+            // Update client's bridge URL
+            this.bridgeUrl = `http://localhost:${bridgeInfo.port}`;
+            this.userSeed = seed;
+            this.agentverseToken = agentverseToken;
+            
+            // Wait a moment for bridge to be fully ready
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            return bridgeInfo;
+        } catch (error) {
+            // Clean up on error
+            try {
+                // Kill any running Python process
+                if (typeof pythonProcess !== 'undefined' && !pythonProcess.killed) {
+                    pythonProcess.kill();
+                }
+            } catch (e) {
+                // Ignore
+            }
+            
+            try {
+                // Clean up temp file
+                require('fs').unlinkSync(tempScript);
+            } catch (e) {
+                // Ignore
+            }
+            
+            throw new Error(`Failed to create user bridge: ${error.message}`);
+        }
+    }
+
+    /**
+     * Get bridge ID from seed
+     * @private
+     */
+    _getBridgeId(seed) {
+        return crypto.createHash('sha256').update(seed).digest('hex').substring(0, 16);
+    }
+
+    /**
      * Initialize the bridge agent process (shared)
      * @private
      */
     _initBridgeAgent() {
-        // Try multiple paths to find bridge_agent.py
-        const possiblePaths = [
-            path.join(__dirname, 'bridge_agent.py'),
-            path.join(process.cwd(), 'node_modules', 'uagent-client', 'bridge_agent.py')
-        ];
-        
-        // Try require.resolve only if package is installed
-        try {
-            const resolved = require.resolve('uagent-client');
-            possiblePaths.push(path.join(resolved, '..', 'bridge_agent.py'));
-        } catch (e) {
-            // Package not installed via npm, skip this path
-        }
-        
-        let bridgePath = null;
-        for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-                bridgePath = p;
-                break;
-            }
-        }
+        const bridgePath = this._findBridgeAgent();
         
         if (!bridgePath) {
-            console.warn('⚠️  Bridge agent not found. Tried:');
-            possiblePaths.forEach(p => console.warn('    -', p));
-            console.warn('    Disabling auto-start. Please start bridge manually or check installation.');
             this.autoStartBridge = false;
             return;
         }
 
-        // Increment reference count
-        bridgeRefCount++;
         this.isRegistered = true;
-        
-        if (process.env.DEBUG_BRIDGE === 'verbose') {
-            console.log(`[Client ${this.instanceId}] Registered. Total clients: ${bridgeRefCount}`);
-        }
+        this._startBridgeAgent(bridgePath);
+    }
 
-        // Start bridge only if not already started or starting
-        if (!sharedBridgeProcess && !bridgeStartingState) {
-            this._startBridgeAgent(bridgePath);
-        } else if (bridgeReadyState) {
-            if (process.env.DEBUG_BRIDGE !== 'silent') {
-                console.log(`🔗 Using existing bridge at ${this.bridgeUrl}`);
+    /**
+     * Find bridge_agent.py file
+     * @private
+     */
+    _findBridgeAgent() {
+        const possiblePaths = [
+            path.join(__dirname, 'bridge_agent.py'),
+            path.join(__dirname, '..', 'uagent-nodejs-client', 'bridge_agent.py'),
+            path.join(process.cwd(), 'node_modules', 'uagent-client', 'bridge_agent.py'),
+            path.join(process.cwd(), 'bridge_agent.py')
+        ];
+        
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                return p;
             }
         }
+        
+        return null;
     }
 
     /**
@@ -106,77 +305,49 @@ class UAgentClient {
      * @private
      */
     _startBridgeAgent(bridgePath) {
-        if (sharedBridgeProcess || bridgeStartingState) {
-            return; // Already starting or started
-        }
-
-        bridgeStartingState = true;
-        // console.log('🌉 Starting shared bridge agent...');
-        // console.log(`   (Client ${this.instanceId}, Total clients: ${bridgeRefCount})`);
-        
         // Spawn Python process
-        sharedBridgeProcess = spawn('python', [bridgePath], {
+        const bridgeProcess = spawn('python', [bridgePath], {
             stdio: ['ignore', 'pipe', 'pipe'],
             detached: false
         });
 
+        this.bridgeProcess = bridgeProcess;
+
         // Handle stdout
-        sharedBridgeProcess.stdout.on('data', (data) => {
-            const output = data.toString();
-            if (output.includes('Starting server on') || output.includes('Uvicorn running')) {
-                bridgeReadyState = true;
-                bridgeStartingState = false;
-                if (process.env.DEBUG_BRIDGE !== 'silent') {
-                    // console.log('✅ Shared bridge ready at', this.bridgeUrl);
-                    // console.log(`   Available for ${bridgeRefCount} client(s)`);
-                }
-            }
-            // Log bridge output in debug mode
-            if (process.env.DEBUG_BRIDGE === 'verbose') {
-                // console.log('[Bridge]', output.trim());
-            }
+        bridgeProcess.stdout.on('data', (data) => {
+            // Output suppressed
         });
 
         // Handle stderr
-        sharedBridgeProcess.stderr.on('data', (data) => {
-            const error = data.toString();
-            // Only show important errors
-            if (!error.includes('WARNING') && process.env.DEBUG_BRIDGE === 'verbose') {
-                // console.error('[Bridge]', error.trim());
-            }
+        bridgeProcess.stderr.on('data', (data) => {
+            // Output suppressed
         });
 
         // Handle process exit
-        sharedBridgeProcess.on('close', (code) => {
-            if (code !== 0 && code !== null) {
-                // console.warn(`⚠️  Shared bridge agent exited with code ${code}`);
-            }
-            bridgeReadyState = false;
-            bridgeStartingState = false;
-            sharedBridgeProcess = null;
+        bridgeProcess.on('close', (code) => {
+            this.bridgeProcess = null;
         });
 
-        // Global cleanup handlers (only set once)
+        // Global cleanup handlers
         if (!global.__bridgeCleanupRegistered) {
             global.__bridgeCleanupRegistered = true;
             
             process.on('exit', () => {
-                if (sharedBridgeProcess && !sharedBridgeProcess.killed) {
-                    sharedBridgeProcess.kill('SIGTERM');
+                if (bridgeProcess && !bridgeProcess.killed) {
+                    bridgeProcess.kill('SIGTERM');
                 }
             });
             
             process.on('SIGINT', () => {
-                if (sharedBridgeProcess && !sharedBridgeProcess.killed) {
-                    // console.log('\n🛑 Stopping shared bridge...');
-                    sharedBridgeProcess.kill('SIGTERM');
+                if (bridgeProcess && !bridgeProcess.killed) {
+                    bridgeProcess.kill('SIGTERM');
                 }
                 process.exit(0);
             });
             
             process.on('SIGTERM', () => {
-                if (sharedBridgeProcess && !sharedBridgeProcess.killed) {
-                    sharedBridgeProcess.kill('SIGTERM');
+                if (bridgeProcess && !bridgeProcess.killed) {
+                    bridgeProcess.kill('SIGTERM');
                 }
                 process.exit(0);
             });
@@ -190,25 +361,10 @@ class UAgentClient {
      */
     async waitForBridge(maxWaitTime = 20000) {
         const startTime = Date.now();
-        let lastLog = 0;
-        const checkInterval = 1000;  // Check every second
-        
-        // If bridge just reported ready, give it a moment
-        if (bridgeReadyState) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return true;
-        }
+        const checkInterval = 1000;
         
         while (Date.now() - startTime < maxWaitTime) {
-            // Show progress every 4 seconds
-            if (Date.now() - lastLog > 4000) {
-                // console.log('⏳ Waiting for shared bridge...');
-                lastLog = Date.now();
-            }
-            
             if (await this.ping()) {
-                bridgeReadyState = true;
-                // console.log('✅ Shared bridge is responsive');
                 return true;
             }
             await new Promise(resolve => setTimeout(resolve, checkInterval));
@@ -218,33 +374,21 @@ class UAgentClient {
     }
 
     /**
-     * Stop the shared bridge agent process (decrements ref count)
-     * Only stops if this is the last client
+     * Stop the bridge agent process
      */
     stopBridge() {
-        if (!this.isRegistered) {
-            return; // Not registered
+        if (this.bridgeProcess && !this.bridgeProcess.killed) {
+            this.bridgeProcess.kill('SIGTERM');
+            this.bridgeProcess = null;
         }
-
-        // Decrement reference count
-        bridgeRefCount = Math.max(0, bridgeRefCount - 1);
-        this.isRegistered = false;
         
-        if (process.env.DEBUG_BRIDGE === 'verbose') {
-            console.log(`[Client ${this.instanceId}] Unregistered. Remaining clients: ${bridgeRefCount}`);
-        }
-
-        // Only stop bridge if no more clients
-        if (bridgeRefCount === 0 && sharedBridgeProcess && !sharedBridgeProcess.killed) {
-            console.log('🛑 Stopping shared bridge (no more clients)...');
-            sharedBridgeProcess.kill('SIGTERM');
-            sharedBridgeProcess = null;
-            bridgeReadyState = false;
-            bridgeStartingState = false;
-        } else if (bridgeRefCount > 0) {
-            if (process.env.DEBUG_BRIDGE === 'verbose') {
-                console.log(`🔗 Bridge still in use by ${bridgeRefCount} client(s)`);
+        // Clean up user bridge from registry and kill its process
+        if (this.userBridgeId && bridgeRegistry.has(this.userBridgeId)) {
+            const bridgeInfo = bridgeRegistry.get(this.userBridgeId);
+            if (bridgeInfo && bridgeInfo.process && !bridgeInfo.process.killed) {
+                bridgeInfo.process.kill('SIGTERM');
             }
+            bridgeRegistry.delete(this.userBridgeId);
         }
     }
 
@@ -253,22 +397,27 @@ class UAgentClient {
      * @private
      */
     async _ensureBridgeReady() {
-        if (!this.autoStartBridge) {
-            return; // User manages bridge manually
+        if (!this.autoStartBridge && !this.userSeed) {
+            return;
         }
 
-        if (bridgeReadyState) {
-            return; // Shared bridge already ready
+        // If using user bridge, create it first
+        if (this.userSeed && this.agentverseToken && !this.isRegistered) {
+            await this.createUserBridge(this.userSeed, this.agentverseToken, this.bridgePort);
+            this.isRegistered = true;
         }
 
-        const isReady = await this.waitForBridge();
-        
-        if (!isReady) {
-            throw new Error(
-                'Shared bridge agent failed to start automatically.\n' +
-                'Please start it manually: python bridge_agent.py\n' +
-                'Or check if Python and required packages are installed.'
-            );
+        // Check if bridge is responding
+        if (!(await this.ping())) {
+            const isReady = await this.waitForBridge();
+            
+            if (!isReady) {
+                throw new Error(
+                    'Bridge agent failed to start automatically.\n' +
+                    'Please start it manually: python bridge_agent.py\n' +
+                    'Or check if Python and required packages are installed.'
+                );
+            }
         }
     }
 
@@ -299,7 +448,8 @@ class UAgentClient {
                 {
                     target_agent: agentAddress,
                     query: query,
-                    request_id: reqId
+                    request_id: reqId,
+                    seed: this.userSeed || 'default'
                 },
                 {
                     timeout: this.timeout,
@@ -323,21 +473,18 @@ class UAgentClient {
 
         } catch (error) {
             if (error.response) {
-                // Bridge returned an error response
                 return {
                     success: false,
                     error: error.response.data.error || error.message,
                     requestId: reqId
                 };
             } else if (error.request) {
-                // No response received
                 return {
                     success: false,
                     error: 'No response from bridge agent. Is it running?',
                     requestId: reqId
                 };
             } else {
-                // Error setting up request
                 return {
                     success: false,
                     error: error.message,
@@ -369,10 +516,9 @@ class UAgentClient {
      */
     async ping() {
         try {
-            // Try to connect to the bridge - any response means it's alive
             const response = await axios.get(`${this.bridgeUrl}/`, { 
                 timeout: 3000,
-                validateStatus: () => true  // Accept any status code
+                validateStatus: () => true
             });
             return response.status !== undefined;
         } catch {

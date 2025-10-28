@@ -11,6 +11,10 @@ export interface UAgentClientConfig {
     autoStartBridge?: boolean;
     /** Port for bridge agent. Default: 8000 */
     bridgePort?: number;
+    /** Unique seed for per-user bridge agent */
+    userSeed?: string;
+    /** Bearer token for Agentverse registration */
+    agentverseToken?: string;
 }
 
 export interface QueryResponse {
@@ -24,6 +28,17 @@ export interface QueryResponse {
     requestId: string;
 }
 
+export interface BridgeInfo {
+    /** Agent name */
+    name: string;
+    /** Agent address */
+    address: string;
+    /** Port number */
+    port: number;
+    /** Seed used */
+    seed: string;
+}
+
 /**
  * Client for communicating with uAgents from Node.js
  * 
@@ -32,8 +47,14 @@ export interface QueryResponse {
  * 
  * @example
  * ```typescript
- * // Bridge agent starts automatically!
+ * // Simple usage - shared bridge agent starts automatically!
  * const client = new UAgentClient();
+ * 
+ * // Per-user bridge agent with Agentverse registration
+ * const client = new UAgentClient({
+ *     userSeed: 'user-123',
+ *     agentverseToken: 'bearer-token'
+ * });
  * 
  * // Query any agent address
  * const result = await client.query(
@@ -59,6 +80,15 @@ export default class UAgentClient {
      * @param config - Configuration options
      */
     constructor(config?: UAgentClientConfig);
+
+    /**
+     * Get or create a per-user bridge agent
+     * @param seed - Unique seed for the user
+     * @param agentverseToken - Bearer token for Agentverse registration
+     * @param port - Optional port number
+     * @returns Promise with bridge agent info
+     */
+    createUserBridge(seed: string, agentverseToken: string, port?: number): Promise<BridgeInfo>;
 
     /**
      * Send a query to a uAgent and get full response object
@@ -118,7 +148,7 @@ export default class UAgentClient {
     /**
      * Wait for bridge agent to be ready
      * 
-     * @param maxWaitTime - Maximum time to wait in milliseconds (default: 15000)
+     * @param maxWaitTime - Maximum time to wait in milliseconds (default: 20000)
      * @returns Promise with true if bridge is ready
      */
     waitForBridge(maxWaitTime?: number): Promise<boolean>;

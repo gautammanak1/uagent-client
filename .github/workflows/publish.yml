@@ -24,13 +24,7 @@ jobs:
           scope: '@gautammanak1'
 
       - name: Install dependencies
-        run: |
-          # Try npm ci first (faster), fallback to npm install if lock file is out of sync
-          if [ -f package-lock.json ]; then
-            npm ci || npm install
-          else
-            npm install
-          fi
+        run: npm install
 
       - name: Publish to npm
         run: npm publish --access public --provenance

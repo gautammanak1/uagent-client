@@ -41,7 +41,7 @@
 - 👥 **Per-User Bridges** - Isolated bridge agents for each user  
 - 🌐 **Agentverse Integration** - Automatic registration with Agentverse  
 - 🎯 **Simple API** - Just query and get responses  
-- ✅ **Production Ready** - Used in real applications  
+- ✅ **Production Ready** - Used in real applications
 - 🔒 **Secure** - Token management and authentication built-in
 
 ## ⚡ Quick Start
@@ -211,64 +211,22 @@ Each user gets their own isolated bridge agent, automatically registered on Agen
 ## 🏗️ Architecture
 
 ### System Workflow
-
-```mermaid
-flowchart LR
-    A[Your Application] -->|HTTP Request| B[uagent-client<br/>Node Module]
-    B -->|Python Bridge| C[Bridge Agent<br/>bridge_agent.py]
-    C -->|uAgent Protocol| D[Target Agent<br/>Blockchain]
-    D -->|Response| C
-    C -->|HTTP Response| B
-    B -->|JSON Response| A
-    
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#fce4ec
-    style D fill:#f3e5f5
-```
-
-### Complete Data Flow
-
-```mermaid
-sequenceDiagram
-    participant App as Your Application
-    participant Client as UAgentClient
-    participant Bridge as Bridge Agent
-    participant Agent as Target uAgent
-    
-    App->>Client: query(agentAddress, message)
-    Client->>Bridge: POST /query
-    Bridge->>Agent: ChatMessage Protocol
-    Agent->>Agent: Process Query
-    Agent->>Bridge: ChatMessage Response
-    Bridge->>Client: HTTP Response
-    Client->>App: JSON Result
-```
+![System Workflow](./public/workflow2.png)
 
 ### Per-User Isolation
 
-```mermaid
-graph TD
-    subgraph "User A"
-        A1[App Request] --> A2[Client A<br/>seed: user-123]
-        A2 --> A3[Bridge A<br/>port: 8001]
-        A3 --> Target[Target Agent]
-    end
-    
-    subgraph "User B"
-        B1[App Request] --> B2[Client B<br/>seed: user-456]
-        B2 --> B3[Bridge B<br/>port: 8002]
-        B3 --> Target
-    end
-    
-    style A1 fill:#e1f5ff
-    style A2 fill:#fff4e1
-    style A3 fill:#fce4ec
-    style B1 fill:#e1f5ff
-    style B2 fill:#fff4e1
-    style B3 fill:#fce4ec
-    style Target fill:#f3e5f5
-```
+Each user can have their own isolated bridge agent, providing separation and security:
+
+![Per-User Isolation](./public/workflow1.png)
+
+### Complete Workflow Diagram
+
+The complete lifecycle of a uAgent client session, showing the interaction between User, Python Script (Bridge), uAgent, Agentverse, and Target Agent:
+
+![Complete Workflow](./public/workflow.png)
+
+
+This diagram shows the complete lifecycle of a uAgent client session, from initialization through query handling to cleanup.
 
 ## 🚀 Deployment
 
@@ -852,18 +810,43 @@ const user2Response = await chatPerUser('user-456', 'Hello');
 
 ## 🔗 Additional Resources
 
-🚀 **[Frontend Integration Example](https://github.com/gautammanak1/frontend-integration)** - Full Next.js chat app with:
+For the complete code and additional examples, visit the [uAgent Client Repository](https://github.com/fetchai/innovation-lab-examples/tree/main/frontend-integration/frontend-integration).- Full Next.js chat app with:
 - Modern UI (like ChatGPT)
 - Dark mode support
 - TypeScript
 - Production-ready code
 
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines:
+
+- 📖 [Contributing Guide](CONTRIBUTING.md) - How to contribute
+- 📋 [Code of Conduct](CODE_OF_CONDUCT.md) - Community standards
+- 🔒 [Security Policy](SECURITY.md) - Reporting vulnerabilities
+- 📝 [Changelog](CHANGELOG.md) - Version history
+
+### Quick Start for Contributors
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+For more details, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 📦 Links
 
 - [📦 NPM Package](https://www.npmjs.com/package/uagent-client)
 - [💻 GitHub Repository](https://github.com/gautammanak1/uagent-client)
+- [🐛 Report Bug](https://github.com/gautammanak1/uagent-client/issues/new?template=bug_report.md)
+- [💡 Request Feature](https://github.com/gautammanak1/uagent-client/issues/new?template=feature_request.md)
 - [🌐 Fetch.ai](https://fetch.ai)
 - [🤖 uAgents Framework](https://github.com/fetchai/uAgents)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
@@ -872,5 +855,9 @@ const user2Response = await chatPerUser('user-456', 'Hello');
 **Made with ❤️ for the Fetch.ai ecosystem**
 
 **License**: [MIT](LICENSE) • **Author**: [@gautammanak1](https://github.com/gautammanak1)
+
+[![Contributors](https://img.shields.io/github/contributors/gautammanak1/uagent-client)](https://github.com/gautammanak1/uagent-client/graphs/contributors)
+[![Issues](https://img.shields.io/github/issues/gautammanak1/uagent-client)](https://github.com/gautammanak1/uagent-client/issues)
+[![Stars](https://img.shields.io/github/stars/gautammanak1/uagent-client)](https://github.com/gautammanak1/uagent-client/stargazers)
 
 </div>

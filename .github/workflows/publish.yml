@@ -25,8 +25,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Try npm ci first (faster), fallback to npm install if lock file is out of sync
           if [ -f package-lock.json ]; then
-            npm ci
+            npm ci || npm install
           else
             npm install
           fi
